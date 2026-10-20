@@ -40,6 +40,37 @@ import { deleteEnvVarCaseAware } from './provision.ts';
 
 export type CloudflareBuild = Awaited<ReturnType<typeof buildCloudflareWorker>>;
 
+/** The environment for a Cloudflare Worker build: credentials scrubbed, deploy-build mode, production NODE_ENV. */
+export function createCloudflareWorkerBuildEnv(options: {
+  accountId: string | undefined;
+  apiBaseUrl: string;
+  preserveBindings: boolean;
+}): NodeJS.ProcessEnv {
+  const { accountId, apiBaseUrl, preserveBindings } = options;
+  const buildChildEnv = scrubManagedDeployBuildMarkers(
+    scrubWranglerAuthCredentials(deployChildEnv(accountId, apiBaseUrl)),
+  );
+  // `deployChildEnv` pins only a given account, so without one drop an ambient account too.
+  if (accountId === undefined) {
+    deleteEnvVarCaseAware(buildChildEnv, 'CLOUDFLARE_ACCOUNT_ID');
+    deleteEnvVarCaseAware(buildChildEnv, 'CF_ACCOUNT_ID');
+  }
+  // Tell void:env to build Worker vars from portable production dotenv files
+  // only. Outside this deploy path Vite keeps its standard dotenv behavior,
+  // but local files cannot be serialized into the artifact this command uploads.
+  deleteEnvVarCaseAware(buildChildEnv, CLOUDFLARE_DEPLOY_BUILD_ENV);
+  buildChildEnv[CLOUDFLARE_DEPLOY_BUILD_ENV] = '1';
+  deleteEnvVarCaseAware(buildChildEnv, CLOUDFLARE_PRESERVE_BINDINGS_BUILD_ENV);
+  if (preserveBindings) {
+    buildChildEnv[CLOUDFLARE_PRESERVE_BINDINGS_BUILD_ENV] = '1';
+  }
+  // The env-schema probes run with NODE_ENV=production; `vite build` keeps an ambient value, so
+  // pin it here too.
+  deleteEnvVarCaseAware(buildChildEnv, 'NODE_ENV');
+  buildChildEnv.NODE_ENV = 'production';
+  return buildChildEnv;
+}
+
 /** Build the Worker without Cloudflare credentials, then run the post-build gates. */
 export async function buildCloudflareWorker(input: {
   readonly root: string;
@@ -73,22 +104,11 @@ export async function buildCloudflareWorker(input: {
     bindingIdentitySnapshot,
   } = input.preflight;
 
-  const buildChildEnv = scrubManagedDeployBuildMarkers(
-    scrubWranglerAuthCredentials(deployChildEnv(accountId, apiBaseUrl)),
-  );
-  // Tell void:env to build Worker vars from portable production dotenv files
-  // only. Outside this deploy path Vite keeps its standard dotenv behavior,
-  // but local files cannot be serialized into the artifact this command uploads.
-  deleteEnvVarCaseAware(buildChildEnv, CLOUDFLARE_DEPLOY_BUILD_ENV);
-  buildChildEnv[CLOUDFLARE_DEPLOY_BUILD_ENV] = '1';
-  deleteEnvVarCaseAware(buildChildEnv, CLOUDFLARE_PRESERVE_BINDINGS_BUILD_ENV);
-  if (existingWorker) {
-    buildChildEnv[CLOUDFLARE_PRESERVE_BINDINGS_BUILD_ENV] = '1';
-  }
-  // The env-schema probes run with NODE_ENV=production; `vite build` keeps an ambient value, so
-  // pin it here too.
-  deleteEnvVarCaseAware(buildChildEnv, 'NODE_ENV');
-  buildChildEnv.NODE_ENV = 'production';
+  const buildChildEnv = createCloudflareWorkerBuildEnv({
+    accountId,
+    apiBaseUrl,
+    preserveBindings: Boolean(existingWorker),
+  });
   const runBuild =
     deps.runBuild ??
     ((env: NodeJS.ProcessEnv) => {
