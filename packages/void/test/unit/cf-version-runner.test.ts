@@ -2398,8 +2398,7 @@ it('preserves activation metadata and sorts cf version history for the existing 
       'versions',
       'create',
       '--prebuilt',
-      '--message',
-      'void:metadata',
+      '--message=void:metadata',
       '--preview-alias',
       'void-ready',
     ]);
