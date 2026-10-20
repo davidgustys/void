@@ -23,6 +23,27 @@ import { collectRevalidate } from './isr-config.ts';
 import { hasEmailHandlers } from './router/email.ts';
 import { validateSsrEntry } from './ssr/entry.ts';
 
+export {
+  type PrepareCloudflareArtifactOptions,
+  prepareCloudflareArtifact,
+} from './cli/cf-artifact-prepare.ts';
+export {
+  CloudflareArtifactPublishError,
+  type PublishCloudflareArtifactOptions,
+  type PublishedCloudflareArtifact,
+  publishCloudflareArtifact,
+} from './cli/cf-artifact-publish.ts';
+export { CloudflareArtifactError } from './cli/cf-artifact-files.ts';
+export type {
+  CloudflareArtifactManifest,
+  CloudflareArtifactRequirements,
+} from './cli/cf-artifact-schema.ts';
+export {
+  type CloudflareArtifactTarget,
+  type CloudflareArtifactTargetBinding,
+  CloudflareArtifactTargetError,
+} from './cli/cf-artifact-target.ts';
+
 /**
  * A disposable Cloudflare Build Output directory. Experimental: it follows Cloudflare's draft
  * Build Output format, which can change between Void releases.
