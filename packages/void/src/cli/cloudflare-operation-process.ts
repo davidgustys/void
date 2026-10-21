@@ -1007,6 +1007,7 @@ async function workerHistory(): Promise<Result> {
           versions,
           ...(operation.message ? { annotations: { 'workers/message': operation.message } } : {}),
         }),
+        ...(operation.bypassDeploymentChecks ? ['--bypass-deployment-checks'] : []),
       ]);
     }
     default:

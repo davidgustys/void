@@ -671,6 +671,7 @@ export function createCfVersionRunner(options: {
                 }),
               ]
             : []),
+          ...(operation.bypassDeploymentChecks ? ['--bypass-deployment-checks'] : []),
         ],
         command.capture,
       );
