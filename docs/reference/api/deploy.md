@@ -87,3 +87,72 @@ Preparation builds the app, runs Void's build checks, and writes the artifact to
 Preparation refuses an app it cannot package: a PostgreSQL or MySQL database, a Node, Bun or Deno target, static output, a framework, Sandbox, Live, or a `seed` without a D1 database. It also refuses to run while Cloudflare credentials, such as `CLOUDFLARE_API_TOKEN`, are set, because the build runs project code.
 
 Pass the artifact directory to the publish job unchanged.
+
+### Publish an artifact
+
+Run publish in the trusted job with `CLOUDFLARE_API_TOKEN` in the environment:
+
+```ts
+import { publishCloudflareArtifact } from 'void/deploy';
+
+const published = await publishCloudflareArtifact('/path/to/artifact', {
+  accountId: '0123456789abcdef0123456789abcdef',
+  workerName: 'my-app-pr-42',
+  bindings: {
+    DB: { type: 'd1', id: '0b1f8c2e-1111-4222-8333-944455556666', name: 'my-app-pr-42-db' },
+  },
+  queues: {},
+  secrets: { API_KEY: process.env.PREVIEW_API_KEY ?? '' },
+  routes: [],
+  workersDev: true,
+  previewUrls: true,
+  workersDevSubdomain: 'my-team',
+  seed: true,
+});
+```
+
+The target describes where the Worker goes:
+
+| Field                 | Description                                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `accountId`           | Cloudflare account ID.                                                                                              |
+| `workerName`          | Worker to publish: lowercase letters, digits and hyphens, up to 63 characters.                                      |
+| `apiBaseUrl`          | Optional Cloudflare API base URL. When set, it must equal `CLOUDFLARE_API_BASE_URL` in the environment.             |
+| `bindings`            | Resources by binding name: every D1, KV and R2 binding the app declares, and nothing else.                          |
+| `queues`              | Physical queue name for each logical queue. A physical name equals the logical name or ends with `-<logical name>`. |
+| `isrCache`            | ISR cache KV namespace, `{ id }`. Required when the app needs an ISR cache.                                         |
+| `email`               | Required when the app handles or sends email: `projectSlug`, `domain`, and optional `send` settings.                |
+| `vars`                | Plain-text variables.                                                                                               |
+| `secrets`             | Secret values by name. The names must match the app's required secrets exactly.                                     |
+| `routes`              | `{ pattern, zoneName }` pairs, such as `pr-42.example.com/*` in its zone.                                           |
+| `workersDev`          | Whether the Worker is served on workers.dev.                                                                        |
+| `previewUrls`         | Whether version preview URLs are enabled.                                                                           |
+| `workersDevSubdomain` | Your account's workers.dev subdomain. Needed to check readiness when `routes` is empty.                             |
+| `seed`                | Whether to run the seed after the migrations.                                                                       |
+
+Publish verifies the artifact against its manifest and checks the target before it contacts Cloudflare. It then:
+
+1. Checks the Cloudflare session.
+2. Applies the D1 migrations in build order. It saves a D1 restore point first, and prints the command that undoes the migrations.
+3. Runs the seed, when `seed` is true.
+4. Uploads a new Worker version, checks readiness on that exact version, moves traffic to it, and syncs triggers.
+
+Publish creates no resources, so every binding must already exist. Routes, custom domains, workers.dev settings, email routing and log destinations from the app's configuration are ignored; the target decides them. A `seed.sql` larger than 100 KiB is refused.
+
+A first publish of a new Worker sends traffic to it before the readiness check runs, so a failed check leaves that Worker serving. Keep preview Workers to test data.
+
+Publish resolves with the Worker name, the new and previous version IDs, the URL that readiness checked, the applied migration names and whether the seed ran.
+
+### Safety
+
+- Run publish on a directory that no other process can write to. Publish verifies the artifact against its manifest, but it cannot guard against a writer that runs alongside it.
+- Never give the build job Cloudflare credentials. Preparation refuses to run with them, and the build runs your project code.
+- Give previews test-mode secrets only.
+
+### Errors
+
+| Error                            | Thrown when                                                                                         | Fields                                                                                                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CloudflareArtifactError`        | The artifact fails a check, such as a file that differs from the manifest or a bad migration order. | `code` names the failed check, such as `mismatch` or `layout`; `path` names the entry.                                                                  |
+| `CloudflareArtifactTargetError`  | The target is invalid or does not match the artifact.                                               | `field` is the dotted path of the bad field, such as `bindings.DB.id`.                                                                                  |
+| `CloudflareArtifactPublishError` | A publish step fails after the target is accepted.                                                  | `reason` is `connect`, `auth`, `migrations` or `seed`, or an activation failure reason; `versionId` and `rollback` are set when a version was uploaded. |
