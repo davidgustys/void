@@ -16,6 +16,7 @@ import {
   createCloudflareArtifactManifest,
   writeCloudflareArtifactManifest,
 } from '../../src/cli/cf-artifact-schema.ts';
+import type { CloudflareArtifactTarget } from '../../src/cli/cf-artifact-target.ts';
 
 export const PROVENANCE = { voidVersion: '0.0.0-test', commit: null, builtAt: null };
 export const MIGRATIONS: Array<string> = ['0000_init.sql', '0001_add_users.sql'];
@@ -193,4 +194,40 @@ export function writeBuiltProject(
   const seedFile = join(root, 'seed.sql');
   writeFileSync(seedFile, SEED_SQL);
   return { root, workerDirectory, outDir: join(root, 'artifact'), migrationsDirectory, seedFile };
+}
+
+export function makeTarget(
+  overrides: Partial<CloudflareArtifactTarget> = {},
+): CloudflareArtifactTarget {
+  return {
+    accountId: '0123456789abcdef0123456789abcdef',
+    workerName: 'void-preview-42',
+    bindings: {
+      DB: { type: 'd1', id: '0b1f8c2e-1111-4222-8333-944455556666', name: 'preview-42-db' },
+      KV: { type: 'kv', id: 'fedcba9876543210fedcba9876543210' },
+    },
+    queues: { 'demo-queue': 'preview-42-demo-queue' },
+    secrets: { ...SECRET_VALUES },
+    routes: [],
+    workersDev: true,
+    previewUrls: true,
+    workersDevSubdomain: 'preview-tests',
+    seed: true,
+    ...overrides,
+  };
+}
+
+export function expectError<T extends Error>(
+  action: () => unknown,
+  ErrorClass: abstract new (...args: Array<never>) => T,
+): T {
+  try {
+    action();
+  } catch (error) {
+    if (error instanceof ErrorClass) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error('Expected rejection.');
 }
