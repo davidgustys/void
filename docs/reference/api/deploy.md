@@ -53,3 +53,37 @@ Pass the Worker output directory that contains a generated `wrangler.json`, such
 | `mode`      | Vite build mode. Native output keeps the mode it was built with, and a different value returns `null`. For other output it defaults to `production`. |
 
 The result contains `directory`, an optional `assetsDirectory` pointing to the input assets, and an asynchronous `dispose()` method. Always dispose the result after use. Unsupported build configuration returns `null`. A directory without a Worker build, a missing or invalid Worker module, or an asset symlink outside the asset directory throws an error.
+
+## Cloudflare artifacts
+
+::: warning Experimental
+The Cloudflare artifact functions are experimental. Their options, the artifact layout and the target shape can change between Void releases.
+:::
+
+Cloudflare artifacts let a build job run the app without Cloudflare credentials and write an artifact directory for a separate trusted publish job.
+
+### Prepare an artifact
+
+Run preparation in the build job:
+
+```ts
+import { prepareCloudflareArtifact } from 'void/deploy';
+
+await prepareCloudflareArtifact('/path/to/app', {
+  outDir: '/path/to/artifact',
+  seed: 'db/seed.sql',
+  commit: process.env.GITHUB_SHA,
+});
+```
+
+Preparation builds the app, runs Void's build checks, and writes the artifact to `outDir`. It resolves with the artifact manifest.
+
+| Option   | Description                                                                                                                                               |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `outDir` | Directory to write. It must be missing or empty.                                                                                                          |
+| `seed`   | SQL file relative to the app root, inside the root and not a symlink. It runs after the migrations on every publish, so write it to be safe to run again. |
+| `commit` | Source commit, 7 to 64 lowercase hex characters. It is recorded for information only.                                                                     |
+
+Preparation refuses an app it cannot package: a PostgreSQL or MySQL database, a Node, Bun or Deno target, static output, a framework, Sandbox, Live, or a `seed` without a D1 database. It also refuses to run while Cloudflare credentials, such as `CLOUDFLARE_API_TOKEN`, are set, because the build runs project code.
+
+Pass the artifact directory to the publish job unchanged.
