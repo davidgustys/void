@@ -14,7 +14,7 @@ function setup(
   data: unknown,
   failure?: 'activation' | 'triggers',
   // How Cloudflare answers a deploy of the previous version without force.
-  rollback?: 'secret-changed' | 'secret-changed-elsewhere' | 'error',
+  rollback?: 'secret-changed' | 'deployed-elsewhere' | 'error',
 ) {
   const calls: Array<CloudflareOperation> = [];
   let uploaded = false;
@@ -62,7 +62,7 @@ function setup(
           if (rollback === 'error') {
             return { ...ok(), status: 1, errorCode: 10000 };
           }
-          if (rollback === 'secret-changed-elsewhere') {
+          if (rollback === 'deployed-elsewhere') {
             versions = [{ version_id: other, percentage: 100 }];
           }
           return { ...ok(), status: 1, errorCode: 10220 };
@@ -201,8 +201,8 @@ it.each(recoveries)(
   },
 );
 
-it('does not force a restore over a secret changed outside Void', async () => {
-  const { result, rollbacks } = await recover(recoveries[0], 'secret-changed-elsewhere');
+it('does not force a restore after someone else deploys', async () => {
+  const { result, rollbacks } = await recover(recoveries[0], 'deployed-elsewhere');
   expect(result).toMatchObject({ ok: false, reason: 'readiness-failed', rollback: 'unsafe' });
   expect(rollbacks).toHaveLength(1);
   expect(rollbacks[0]).not.toHaveProperty('bypassDeploymentChecks');

@@ -2631,7 +2631,7 @@ async function restorePreviousVersion(
   // Cloudflare refuses to move traffic back to a version older than a secret
   // change (10220). When the failed version made that change, force the
   // restore, as Wrangler's rollback does. Check again first that Void still
-  // owns traffic, so a secret changed by someone else is not overwritten.
+  // owns traffic, so a deployment made by someone else is not overwritten.
   if (result.errorCode === CLOUDFLARE_SECRET_CHANGED_ERROR) {
     if (!(await ownsExpectedTraffic())) {
       return 'unsafe';
