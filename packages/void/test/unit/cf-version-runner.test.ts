@@ -2551,6 +2551,9 @@ it('preserves activation metadata and sorts cf version history for the existing 
       '--preview-alias',
       'void-ready',
     ]);
+    // A leading "-" stays part of the message, not a cf flag.
+    await runner({ type: 'worker.deploy', ...target, message: '-void' }, { capture: true });
+    expect(calls.at(-1)).toEqual(['deploy', '--prebuilt', '--message=-void']);
     await runner(
       {
         type: 'versions.deploy',
