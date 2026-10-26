@@ -18,6 +18,7 @@ import type { CloudflareUploadResult } from './operations.ts';
 import { isVoidSecretOnlyDraft, isWranglerSecretOnlyDraft } from './secret-draft.ts';
 
 const DURABLE_MIGRATION_VERSION_ERROR = 10211;
+const CLOUDFLARE_SECRET_CHANGED_ERROR = 10220;
 
 export type CloudflareVersionMetadata =
   | Readonly<{
@@ -2608,20 +2609,35 @@ async function restorePreviousVersion(
   if (!options.verifyUploader()) {
     return 'unsafe';
   }
-  const owner = await readCurrentProductionVersion(options);
-  if (
-    owner.kind !== 'ok' ||
-    !expectedOwnedTraffic.some((expected) =>
-      productionVersionPercentagesEqual(owner.versions, expected),
-    )
-  ) {
+  const ownsExpectedTraffic = async () => {
+    const owner = await readCurrentProductionVersion(options);
+    return (
+      owner.kind === 'ok' &&
+      expectedOwnedTraffic.some((expected) =>
+        productionVersionPercentagesEqual(owner.versions, expected),
+      )
+    );
+  };
+  if (!(await ownsExpectedTraffic())) {
     return 'unsafe';
   }
-  const result = await deployVersionPercentages(
-    { ...options, bypassDeploymentChecks: true },
-    [`${previousVersionId}@100`],
-    `Void automatic rollback after ${cause}.`,
-  );
+  const restore = (bypassDeploymentChecks: boolean) =>
+    deployVersionPercentages(
+      { ...options, bypassDeploymentChecks },
+      [`${previousVersionId}@100`],
+      `Void automatic rollback after ${cause}.`,
+    );
+  let result = await restore(false);
+  // Cloudflare refuses to move traffic back to a version older than a secret
+  // change (10220). When the failed version made that change, force the
+  // restore, as Wrangler's rollback does. Check again first that Void still
+  // owns traffic, so a secret changed by someone else is not overwritten.
+  if (result.errorCode === CLOUDFLARE_SECRET_CHANGED_ERROR) {
+    if (!(await ownsExpectedTraffic())) {
+      return 'unsafe';
+    }
+    result = await restore(true);
+  }
   return isCleanCommandExit(result) ? 'succeeded' : 'failed';
 }
 

@@ -375,14 +375,11 @@ describe('Cloudflare version operations', () => {
       runner.mock.calls.filter(([args]) => args.type === 'versions.deploy').map(([args]) => args),
     ).toEqual([
       expect.objectContaining({ versions: [{ versionId: 'v1', percentage: 100 }] }),
-      expect.objectContaining({
-        versions: [{ versionId: 'v2', percentage: 100 }],
-        bypassDeploymentChecks: true,
-      }),
+      expect.objectContaining({ versions: [{ versionId: 'v2', percentage: 100 }] }),
     ]);
-    expect(
-      runner.mock.calls.find(([args]) => args.type === 'versions.deploy')![0],
-    ).not.toHaveProperty('bypassDeploymentChecks');
+    for (const [args] of runner.mock.calls) {
+      expect(args).not.toHaveProperty('bypassDeploymentChecks');
+    }
     expect(runner.mock.calls.filter(([args]) => args.type === 'triggers.deploy')).toHaveLength(2);
     expect(runner.mock.calls.filter(([args]) => args.type === 'triggers.clear-crons')).toHaveLength(
       1,

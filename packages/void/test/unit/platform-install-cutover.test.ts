@@ -674,6 +674,12 @@ it('still restores a failed cutover without credential updates', async () => {
           args.type === 'versions.deploy' && args.message?.startsWith('Void platform restoration'),
       ),
   ).toBe(true);
+  // Neither the activations nor the restorations skip Cloudflare's checks.
+  expect(
+    cloud.commands.filter(
+      ({ args }) => args.type === 'versions.deploy' && args.bypassDeploymentChecks !== undefined,
+    ),
+  ).toEqual([]);
 });
 
 function stagedKeys(manifest: PlatformInstallationManifest, generation: number) {

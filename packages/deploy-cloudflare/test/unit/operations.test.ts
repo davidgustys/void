@@ -8,8 +8,14 @@ import { activateCloudflareVersion, encodeCloudflareVersionMessage } from '../..
 
 const current = '11111111-1111-4111-8111-111111111111';
 const next = '22222222-2222-4222-8222-222222222222';
+const other = '33333333-3333-4333-8333-333333333333';
 
-function setup(data: unknown, failure?: 'activation' | 'triggers') {
+function setup(
+  data: unknown,
+  failure?: 'activation' | 'triggers',
+  // How Cloudflare answers a deploy of the previous version without force.
+  rollback?: 'secret-changed' | 'secret-changed-elsewhere' | 'error',
+) {
   const calls: Array<CloudflareOperation> = [];
   let uploaded = false;
   let triggerFailed = false;
@@ -47,6 +53,20 @@ function setup(data: unknown, failure?: 'activation' | 'triggers') {
         uploaded = true;
         return ok(data);
       case 'versions.deploy':
+        if (
+          rollback &&
+          !operation.bypassDeploymentChecks &&
+          operation.versions.length === 1 &&
+          operation.versions[0]?.versionId === current
+        ) {
+          if (rollback === 'error') {
+            return { ...ok(), status: 1, errorCode: 10000 };
+          }
+          if (rollback === 'secret-changed-elsewhere') {
+            versions = [{ version_id: other, percentage: 100 }];
+          }
+          return { ...ok(), status: 1, errorCode: 10220 };
+        }
         if (
           failure === 'activation' &&
           operation.versions.some(
@@ -100,51 +120,100 @@ it('activates structured upload data independently of provider presentation', as
   );
 });
 
-it.each([
+const recoveries = [
   { failure: 'readiness', preserveTriggers: false, reason: 'readiness-failed' },
   { failure: 'readiness', preserveTriggers: true, reason: 'readiness-failed' },
   { failure: 'activation', preserveTriggers: false, reason: 'activation-failed' },
   { failure: 'activation', preserveTriggers: true, reason: 'activation-failed' },
   { failure: 'triggers', preserveTriggers: false, reason: 'triggers-failed' },
-] as const)(
-  'bypasses deployment checks only for automatic $failure recovery with preserveTriggers=$preserveTriggers',
-  async ({ failure, preserveTriggers, reason }) => {
-    const directory = mkdtempSync(join(tmpdir(), 'void-rollback-checks-'));
-    const configPath = join(directory, 'wrangler.json');
-    writeFileSync(configPath, JSON.stringify({ name: 'site' }));
-    try {
-      const { calls, runWrangler } = setup(
-        { versionId: next },
-        failure === 'readiness' ? undefined : failure,
-      );
-      const result = await activateCloudflareVersion({
-        runWrangler,
-        configPath,
-        workerName: 'site',
-        workersDevSubdomain: 'example',
-        preserveTriggers,
-        verifyUploader: () => true,
-        message: encodeCloudflareVersionMessage([]),
-        readinessAttempts: 1,
-        fetch: async () =>
-          failure === 'readiness'
-            ? new Response('not ready', { status: 503 })
-            : Response.json({ ready: true }),
-      });
-      expect(result).toMatchObject({ ok: false, reason, rollback: 'succeeded' });
-      const deployments = calls.filter((operation) => operation.type === 'versions.deploy');
-      expect(deployments.at(-1)).toMatchObject({
-        versions: [{ versionId: current, percentage: 100 }],
-        bypassDeploymentChecks: true,
-      });
-      for (const operation of deployments.slice(0, -1)) {
-        expect(operation).not.toHaveProperty('bypassDeploymentChecks');
-      }
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
+] as const;
+
+async function recover(
+  { failure, preserveTriggers }: (typeof recoveries)[number],
+  rollback?: Parameters<typeof setup>[2],
+) {
+  const directory = mkdtempSync(join(tmpdir(), 'void-rollback-checks-'));
+  const configPath = join(directory, 'wrangler.json');
+  writeFileSync(configPath, JSON.stringify({ name: 'site' }));
+  try {
+    const { calls, runWrangler } = setup(
+      { versionId: next },
+      failure === 'readiness' ? undefined : failure,
+      rollback,
+    );
+    const result = await activateCloudflareVersion({
+      runWrangler,
+      configPath,
+      workerName: 'site',
+      workersDevSubdomain: 'example',
+      preserveTriggers,
+      verifyUploader: () => true,
+      message: encodeCloudflareVersionMessage([]),
+      readinessAttempts: 1,
+      fetch: async () =>
+        failure === 'readiness'
+          ? new Response('not ready', { status: 503 })
+          : Response.json({ ready: true }),
+    });
+    const rollbacks = calls.filter(
+      (operation) =>
+        operation.type === 'versions.deploy' &&
+        operation.versions.length === 1 &&
+        operation.versions[0]?.versionId === current,
+    );
+    return { calls, result, rollbacks };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+it.each(recoveries)(
+  'restores $failure failures without force when Cloudflare accepts it (preserveTriggers=$preserveTriggers)',
+  async (recovery) => {
+    const { calls, result, rollbacks } = await recover(recovery);
+    expect(result).toMatchObject({ ok: false, reason: recovery.reason, rollback: 'succeeded' });
+    expect(rollbacks).toHaveLength(1);
+    for (const operation of calls) {
+      expect(operation).not.toHaveProperty('bypassDeploymentChecks');
     }
   },
 );
+
+it.each(recoveries)(
+  'forces the $failure restore after Cloudflare refuses an old secret version (preserveTriggers=$preserveTriggers)',
+  async (recovery) => {
+    const { calls, result, rollbacks } = await recover(recovery, 'secret-changed');
+    expect(result).toMatchObject({ ok: false, reason: recovery.reason, rollback: 'succeeded' });
+    expect(rollbacks).toEqual([
+      expect.not.objectContaining({ bypassDeploymentChecks: true }),
+      expect.objectContaining({ bypassDeploymentChecks: true }),
+    ]);
+    // Void checks that it still owns traffic between the refusal and the forced retry.
+    const refused = calls.indexOf(rollbacks[0]!);
+    expect(
+      calls.slice(refused, calls.indexOf(rollbacks[1]!)).map((operation) => operation.type),
+    ).toContain('deployments.status');
+    expect(
+      calls.filter(
+        (operation) => operation.type === 'versions.deploy' && operation.bypassDeploymentChecks,
+      ),
+    ).toEqual([rollbacks[1]]);
+  },
+);
+
+it('does not force a restore over a secret changed outside Void', async () => {
+  const { result, rollbacks } = await recover(recoveries[0], 'secret-changed-elsewhere');
+  expect(result).toMatchObject({ ok: false, reason: 'readiness-failed', rollback: 'unsafe' });
+  expect(rollbacks).toHaveLength(1);
+  expect(rollbacks[0]).not.toHaveProperty('bypassDeploymentChecks');
+});
+
+it('does not force a restore that failed for another reason', async () => {
+  const { result, rollbacks } = await recover(recoveries[0], 'error');
+  expect(result).toMatchObject({ ok: false, reason: 'readiness-failed', rollback: 'failed' });
+  expect(rollbacks).toHaveLength(1);
+  expect(rollbacks[0]).not.toHaveProperty('bypassDeploymentChecks');
+});
 
 it('rejects missing structured upload identity before activation', async () => {
   const { calls, runWrangler } = setup({ unrelated: 'value' });

@@ -1249,6 +1249,8 @@ export async function restorePlatformWorkerDeployment(input: {
       `Worker ${input.workerName} changed concurrently before deployment restoration; refusing to overwrite the newer deployment.`,
     );
   }
+  // Not forced: when Cloudflare refuses a version that holds old secrets
+  // (10220), a credential update rolls forward on retry instead.
   const restored = await input.runner(
     {
       type: 'versions.deploy',
@@ -1258,7 +1260,6 @@ export async function restorePlatformWorkerDeployment(input: {
         percentage: version.percentage,
       })),
       message: `Void platform restoration ${input.restoration.id}`,
-      bypassDeploymentChecks: true,
     },
     input.accountId,
     input.directory,
