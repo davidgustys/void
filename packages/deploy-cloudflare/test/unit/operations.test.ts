@@ -172,6 +172,7 @@ it.each(recoveries)(
   async (recovery) => {
     const { calls, result, rollbacks } = await recover(recovery);
     expect(result).toMatchObject({ ok: false, reason: recovery.reason, rollback: 'succeeded' });
+    expect(result).not.toHaveProperty('restoredOlderSecrets');
     expect(rollbacks).toHaveLength(1);
     for (const operation of calls) {
       expect(operation).not.toHaveProperty('bypassDeploymentChecks');
@@ -183,7 +184,12 @@ it.each(recoveries)(
   'forces the $failure restore after Cloudflare refuses an old secret version (preserveTriggers=$preserveTriggers)',
   async (recovery) => {
     const { calls, result, rollbacks } = await recover(recovery, 'secret-changed');
-    expect(result).toMatchObject({ ok: false, reason: recovery.reason, rollback: 'succeeded' });
+    expect(result).toMatchObject({
+      ok: false,
+      reason: recovery.reason,
+      rollback: 'succeeded',
+      restoredOlderSecrets: true,
+    });
     expect(rollbacks).toEqual([
       expect.not.objectContaining({ bypassDeploymentChecks: true }),
       expect.objectContaining({ bypassDeploymentChecks: true }),
@@ -204,6 +210,7 @@ it.each(recoveries)(
 it('does not force a restore after someone else deploys', async () => {
   const { result, rollbacks } = await recover(recoveries[0], 'deployed-elsewhere');
   expect(result).toMatchObject({ ok: false, reason: 'readiness-failed', rollback: 'unsafe' });
+  expect(result).not.toHaveProperty('restoredOlderSecrets');
   expect(rollbacks).toHaveLength(1);
   expect(rollbacks[0]).not.toHaveProperty('bypassDeploymentChecks');
 });
@@ -211,6 +218,7 @@ it('does not force a restore after someone else deploys', async () => {
 it('does not force a restore that failed for another reason', async () => {
   const { result, rollbacks } = await recover(recoveries[0], 'error');
   expect(result).toMatchObject({ ok: false, reason: 'readiness-failed', rollback: 'failed' });
+  expect(result).not.toHaveProperty('restoredOlderSecrets');
   expect(rollbacks).toHaveLength(1);
   expect(rollbacks[0]).not.toHaveProperty('bypassDeploymentChecks');
 });

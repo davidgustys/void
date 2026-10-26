@@ -282,6 +282,25 @@ describe('Cloudflare activation diagnostics', () => {
     ).toContain('did not invoke the changed Wrangler binary');
   });
 
+  it.each(['readiness-failed', 'triggers-failed', 'uploader-changed'] as const)(
+    'says when a forced %s restore put the old secret values back',
+    (reason) => {
+      const forced = formatCloudflareActivationError({
+        ok: false,
+        reason,
+        rollback: 'succeeded',
+        restoredOlderSecrets: true,
+      });
+      expect(forced).toContain('raffic was restored to the previous version');
+      expect(forced).toContain(
+        'The previous version runs with its old secret values; deploy again to apply the new ones.',
+      );
+      expect(
+        formatCloudflareActivationError({ ok: false, reason, rollback: 'succeeded' }),
+      ).not.toContain('secret');
+    },
+  );
+
   it('explains the account default-deny case when first-deploy readiness is blocked', () => {
     const message = formatCloudflareActivationError({
       ok: false,

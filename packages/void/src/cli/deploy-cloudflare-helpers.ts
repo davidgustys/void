@@ -472,6 +472,15 @@ export async function activateCloudflareVersionWithProgress(
 export function formatCloudflareActivationError(
   result: Exclude<CloudflareActivationResult, { ok: true }>,
 ): string {
+  const message = formatCloudflareActivationFailure(result);
+  return result.restoredOlderSecrets
+    ? `${message}\nCloudflare refused to restore the previous version because this deploy changed a secret, so Void forced the restore. The previous version runs with its old secret values; deploy again to apply the new ones.`
+    : message;
+}
+
+function formatCloudflareActivationFailure(
+  result: Exclude<CloudflareActivationResult, { ok: true }>,
+): string {
   const status = result.status === undefined ? '' : ` (exit ${String(result.status)})`;
   const cloudflareCode =
     result.cloudflareErrorCode === undefined
