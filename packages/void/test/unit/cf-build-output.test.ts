@@ -576,7 +576,10 @@ it(
         });
         expect(built.workers.default.config.manifest?.mainModule).toBe('index.js');
         expect(built.workers.default.assetsDir).toBeDefined();
-        expect(expectCfDryRun(prepared.directory).stdout).toContain('--dry-run: exiting now.');
+        const dryRun = expectCfDryRun(prepared.directory);
+        // cf 1.0.0-beta.21 and later print upload messages on stderr.
+        expect(dryRun.stdout).toBe('');
+        expect(dryRun.stderr).toContain('--dry-run: exiting now.');
       },
     );
     expect(existsSync(disposed.directory)).toBe(false);
