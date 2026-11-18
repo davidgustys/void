@@ -10,6 +10,10 @@ import { collectMigrations } from '../migrations/collect.ts';
 import { CLOUDFLARE_ARTIFACT_MIGRATIONS_DIR } from './cf-artifact-schema.ts';
 import { type StagedCloudflareArtifact, stageCloudflareArtifact } from './cf-artifact-stage.ts';
 import { createActiveSecretPinner } from './cf-version-runner.ts';
+import {
+  type CloudflareChildReporter,
+  createCloudflareChildReporter,
+} from './cloudflare-child-report.ts';
 import { type CloudflareD1Context, executeCloudflareD1Sql } from './cloudflare-operations.ts';
 import {
   activateCloudflareVersionWithProgress,
@@ -25,6 +29,7 @@ import {
   checkWranglerMigrationApplySet,
 } from './deploy-migrations.ts';
 import type { CloudflareDeployDeps } from './deploy-types.ts';
+import { openDeployLog } from './log-file.ts';
 
 export type PublishCloudflareArtifactOptions = {
   /** Test and advanced hooks, as for the native deploy. */
@@ -88,10 +93,16 @@ export async function publishCloudflareArtifact(
   options: PublishCloudflareArtifactOptions = {},
 ): Promise<PublishedCloudflareArtifact> {
   const staged = await stageCloudflareArtifact(artifactDir, target);
+  const cliLog = openDeployLog({ mirrorToStderr: false });
   try {
-    return await publishStagedArtifact(staged, options);
+    const reporter = createCloudflareChildReporter(cliLog);
+    return await publishStagedArtifact(staged, options, reporter);
   } finally {
-    await staged.dispose();
+    try {
+      await cliLog.close();
+    } finally {
+      await staged.dispose();
+    }
   }
 }
 
@@ -104,6 +115,7 @@ type AppliedMigrations = {
 async function publishStagedArtifact(
   staged: StagedCloudflareArtifact,
   options: PublishCloudflareArtifactOptions,
+  reporter: CloudflareChildReporter,
 ): Promise<PublishedCloudflareArtifact> {
   const deps = options.deps ?? {};
   const { target } = staged;
@@ -114,6 +126,7 @@ async function publishStagedArtifact(
     deps,
     persistAccount: false,
     readinessAccessOrigin: deps.readinessAccessOrigin,
+    reporter,
   });
   if (!connection) {
     throw new CloudflareArtifactPublishError(
@@ -140,6 +153,7 @@ async function publishStagedArtifact(
     staged,
     connection,
     deps,
+    reporter,
     atomic: options.atomic ?? false,
     workersDevSubdomain: target.workersDevSubdomain ?? connection.workersDevSubdomain,
   });
@@ -266,6 +280,7 @@ async function activateStagedVersion(input: {
   staged: StagedCloudflareArtifact;
   connection: ConnectedArtifactAccount;
   deps: CloudflareDeployDeps;
+  reporter: CloudflareChildReporter;
   atomic: boolean;
   workersDevSubdomain: string | undefined;
 }): Promise<ArtifactActivation> {
@@ -287,6 +302,7 @@ async function activateStagedVersion(input: {
     runWrangler: connection.runWrangler,
     cfUploaderIsPinned: connection.cfUploaderIsPinned,
     verifyCompatibilityRunner: connection.assertUploaderStillPinned,
+    reporter: input.reporter,
   });
   // Target secrets go to the candidate upload itself, which skips pinning. With no target secrets,
   // a secret inherited from the live version must be pinned before the upload.

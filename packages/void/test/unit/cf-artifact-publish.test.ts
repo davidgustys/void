@@ -18,6 +18,7 @@ import {
 } from '../../src/cli/cf-artifact-publish.ts';
 import { CloudflareArtifactTargetError } from '../../src/cli/cf-artifact-target.ts';
 import type { DeployWranglerRun } from '../../src/cli/deploy-types.ts';
+import { openDeployLog } from '../../src/cli/log-file.ts';
 import { WRANGLER_AUTH_CREDENTIAL_ENV_VARS } from '../../src/shared/untrusted-env.ts';
 import {
   SECRET_VALUES,
@@ -36,6 +37,17 @@ import {
 // Record the workspace of every successful staging, so tests can check that publish removed it.
 // Listing the temp directory instead would race with the staging tests running in parallel.
 const staging = vi.hoisted(() => ({ workspaces: [] as Array<string> }));
+
+vi.mock('../../src/cli/log-file.ts', () => ({
+  openDeployLog: vi.fn(() => ({
+    path: null,
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    close: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
 
 vi.mock('../../src/cli/cf-artifact-stage.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/cli/cf-artifact-stage.ts')>();
@@ -120,9 +132,14 @@ beforeEach(() => {
     vi.stubEnv(name, undefined);
   }
   staging.workspaces.length = 0;
+  vi.mocked(openDeployLog).mockClear();
 });
 
 afterEach(() => {
+  expect(openDeployLog).toHaveBeenCalledTimes(staging.workspaces.length);
+  for (const result of vi.mocked(openDeployLog).mock.results) {
+    expect(result.value.close).toHaveBeenCalledExactlyOnceWith();
+  }
   vi.unstubAllEnvs();
   for (const workspace of staging.workspaces) {
     expect(existsSync(workspace)).toBe(false);
@@ -313,6 +330,7 @@ it.each([false, true])(
     }
 
     expect(staging.workspaces).toHaveLength(1);
+    expect(openDeployLog).toHaveBeenCalledExactlyOnceWith({ mirrorToStderr: false });
     expect(result).toEqual({
       workerName: 'void-preview-42',
       versionId: 'version-2',
@@ -480,7 +498,10 @@ it('reports activation failure details and removes its workspace', async () => {
     versionId: 'version-2',
     rollback: 'succeeded',
   });
-  expect(error.message).toContain('did not pass /__void/ready');
+  expect(error.message).toBe(
+    'deploy: the uploaded Worker Version did not pass /__void/ready.\n' +
+      'The failed version remains inactive, and traffic was restored to the previous version.',
+  );
   expect(fake.activations).toHaveLength(1);
 });
 
