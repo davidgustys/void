@@ -45,8 +45,8 @@ export type PublishedCloudflareArtifact = {
   workerName: string;
   versionId: string;
   previousVersionId: string | null;
-  /** The URL readiness probed. */
-  previewUrl: string;
+  /** The URL readiness probed, when Cloudflare reported one. */
+  previewUrl?: string;
   /** Migrations in the artifact, in apply order. */
   migrations: Array<string>;
   seeded: boolean;

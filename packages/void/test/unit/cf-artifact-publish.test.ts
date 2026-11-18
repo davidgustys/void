@@ -373,6 +373,21 @@ it('uses the connection compliance region for the workers.dev lookup', async () 
   });
 });
 
+it('returns the live version when activation succeeds without a preview URL', async () => {
+  const { previewUrl: _previewUrl, ...activation } = READY_ACTIVATION;
+  const fake = fakeCloudflare({ activation });
+
+  await expect(publish(TARGET, fake, { atomic: true })).resolves.toEqual({
+    workerName: TARGET.workerName,
+    versionId: activation.versionId,
+    previousVersionId: activation.previousVersionId,
+    previewUrl: undefined,
+    migrations: MIGRATIONS,
+    seeded: true,
+  });
+  expect(fake.activations).toHaveLength(1);
+});
+
 it('includes artifact observability in the settings snapshot published after activation', async () => {
   const dir = copyArtifact();
   const workerPath = join(dir, '.cloudflare/output/v0/workers/default/worker.config.json');
