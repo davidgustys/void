@@ -1,6 +1,6 @@
 import { lstatSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { convertToWranglerConfig, OutputWorkerSchema } from '@cloudflare/config';
+import { convertToWranglerConfig, BuildOutputWorkerConfigSchema } from '@cloudflare/config';
 import { isAbsolute, join, resolve } from 'pathslash';
 import type { CloudflareArtifactRequirements } from './cf-artifact-schema.ts';
 import type { CloudflareArtifactTarget } from './cf-artifact-target.ts';
@@ -12,7 +12,7 @@ export type CloudflareArtifactWranglerConfigs = {
   root: Record<string, unknown>;
 };
 
-type BoundWorker = ReturnType<typeof OutputWorkerSchema.parse>;
+type BoundWorker = ReturnType<typeof BuildOutputWorkerConfigSchema.parse>;
 type BoundEnv = NonNullable<BoundWorker['env']>;
 type BoundTrigger = NonNullable<BoundWorker['triggers']>[number];
 type QueueTrigger = Extract<BoundTrigger, { type: 'queue' }>;

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, type Stats, writeFileSync } from 'node:fs';
+import { BUILD_OUTPUT_ROOT, BUILD_OUTPUT_VERSION } from '@cloudflare/build-output-utils';
 import { canonicalJson, isRecord } from '@void/deploy-core';
 import { join } from 'pathslash';
 import { compareWranglerMigrationPaths } from '../migrations/apply-order.ts';
@@ -15,9 +16,9 @@ import {
 
 export const CLOUDFLARE_ARTIFACT_FORMAT = 'void-cloudflare-artifact';
 /** The only envelope version this build reads or writes. */
-export const CLOUDFLARE_ARTIFACT_VERSION = 1;
+export const CLOUDFLARE_ARTIFACT_VERSION = 2;
 export const CLOUDFLARE_ARTIFACT_MANIFEST_FILE = 'void-artifact.json';
-export const CLOUDFLARE_ARTIFACT_OUTPUT_DIR = '.cloudflare/output/v0';
+export const CLOUDFLARE_ARTIFACT_OUTPUT_DIR: string = `${BUILD_OUTPUT_ROOT}/${BUILD_OUTPUT_VERSION}`;
 export const CLOUDFLARE_ARTIFACT_MIGRATIONS_DIR = 'migrations';
 export const CLOUDFLARE_ARTIFACT_SEED_FILE = 'seed.sql';
 export const MAX_CLOUDFLARE_ARTIFACT_MANIFEST_BYTES: number = 16 * 1024 * 1024;

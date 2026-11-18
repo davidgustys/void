@@ -111,6 +111,14 @@ function validManifest(): CloudflareArtifactManifest {
   });
 }
 
+it('rejects a version-1 envelope with a clear version error', () => {
+  const error = catchArtifactError(() =>
+    parseCloudflareArtifactManifest({ ...validManifest(), version: 1 }),
+  );
+  expect(error.code).toBe('manifest');
+  expect(error.message).toBe('The artifact version 1 is unsupported.');
+});
+
 function draftOf(manifest: CloudflareArtifactManifest): Draft {
   return JSON.parse(JSON.stringify(manifest));
 }
@@ -258,7 +266,7 @@ const SHAPE_CASES: Array<ShapeCase> = [
   ['requirements', (draft) => (draft.requirements = [])],
   ['requirements.d1', (draft) => (draft.requirements.d1 = 'DB')],
   ['format', (draft) => (draft.format = 'void-other')],
-  ['version', (draft) => (draft.version = 2)],
+  ['version', (draft) => (draft.version = 3)],
   ['version', (draft) => (draft.version = '1')],
   ['provenance.voidVersion', (draft) => (draft.provenance.voidVersion = '1 0')],
   ['provenance.voidVersion', (draft) => (draft.provenance.voidVersion = '')],

@@ -1,5 +1,5 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- these tests break one field of the kitchen-sink config on purpose; `Draft` is the loose shape that keeps each edit readable. */
-import { OutputWorkerSchema } from '@cloudflare/config';
+import { BuildOutputWorkerConfigSchema } from '@cloudflare/config';
 import { describe, expect, it } from 'vite-plus/test';
 import { CloudflareArtifactError } from '../../src/cli/cf-artifact-files.ts';
 import type { CloudflareArtifactRequirements } from '../../src/cli/cf-artifact-schema.ts';
@@ -154,7 +154,7 @@ describe('bindCloudflareArtifactWorker', () => {
     expect(JSON.stringify(config)).not.toMatch(/"(local|default)"/);
     expect(versionMetadataBinding).toBe('__VOID_VERSION_METADATA');
     expect(secretNames).toEqual(['API_URL', 'APP_NAME', 'BETTER_AUTH_SECRET', 'SECRET_KEY']);
-    expect(() => OutputWorkerSchema.parse(config)).not.toThrow();
+    expect(() => BuildOutputWorkerConfigSchema.parse(config)).not.toThrow();
     expect(JSON.stringify({ config, secretNames })).not.toContain(SECRET_VALUE);
   });
 
@@ -391,7 +391,7 @@ describe('bindCloudflareArtifactWorker', () => {
     ['triggers.0.schedule', '@daily'],
     ['triggers.1.maxBatchSize', 101],
     ['triggers.1.visibilityTimeoutMs', 1000],
-    ['triggers.1.maxConcurrency', null],
+    ['triggers.1.maxConcurrency', null, 'triggers.1.maxConcurrency'],
     ['triggers.1.deadLetterQueue', 'nowhere'],
     ['limits', { cpuMs: 0 }, 'limits.cpuMs'],
     ['limits', { cpuMs: 50, subrequests: 10 }, 'limits.subrequests'],

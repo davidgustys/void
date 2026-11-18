@@ -55,9 +55,9 @@ const isWindows = process.platform === 'win32';
 const FIXTURE_TIMEOUT_MS = isWindows ? 90_000 : 30_000;
 
 const ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
-const ROOT_CONFIG_JSON = '.cloudflare/output/v0/config.json';
-const WORKER_CONFIG_JSON = '.cloudflare/output/v0/workers/default/worker.config.json';
-const BUNDLE_MODULE = '.cloudflare/output/v0/workers/default/bundle/index.js';
+const ROOT_CONFIG_JSON = '.cloudflare/output/v1/config.json';
+const WORKER_CONFIG_JSON = '.cloudflare/output/v1/workers/default/worker.config.json';
+const BUNDLE_MODULE = '.cloudflare/output/v1/workers/default/bundle/index.js';
 
 const REQUIREMENTS = makeRequirements();
 const D1 = REQUIREMENTS.d1!;
@@ -197,7 +197,7 @@ it('stages a valid artifact into a fresh upload tree', async () => {
   expect(JSON.stringify(uploaded)).not.toMatch(/"(local|default)"/);
 
   expect(readJson(join(upload, ROOT_CONFIG_JSON))).toEqual({
-    accountId: ACCOUNT_ID,
+    settings: { accountId: ACCOUNT_ID },
     buildContext: { isPreview: false, mode: 'production' },
   });
   expect(pathsUnder(getWorkerBundleDir(upload))).toEqual(['chunks/util.js', 'index.js']);
@@ -429,15 +429,35 @@ it.each(['stage', 'publish'])(
   },
 );
 
+it.each([undefined, {}, { accountId: ACCOUNT_ID }])(
+  'accepts optional root settings %j and producer metadata',
+  async (settings) => {
+    const dir = copyArtifact();
+    rewriteJson(dir, ROOT_CONFIG_JSON, {
+      settings,
+      producer: { name: '@cloudflare/vite-plugin', version: '2.0.0-rc.0' },
+      buildContext: { isPreview: false, mode: 'production' },
+    });
+
+    const staged = await stage(dir, TARGET);
+    const rootConfig = readJson(join(staged.output.directory, ROOT_CONFIG_JSON));
+    expect(rootConfig).toEqual({
+      settings: { accountId: ACCOUNT_ID },
+      buildContext: { isPreview: false, mode: 'production' },
+    });
+  },
+);
+
 it.each<[Record<string, unknown>, string]>([
-  [{ accountId: 'f'.repeat(32) }, 'accountId'],
+  [{ settings: { accountId: 'f'.repeat(32) } }, 'settings.accountId'],
   [
     {
       buildContext: { isPreview: true, mode: 'production' },
     },
     'buildContext.isPreview',
   ],
-  [{ complianceRegion: 'public' }, 'complianceRegion'],
+  [{ settings: { complianceRegion: 'public' } }, 'settings.complianceRegion'],
+  [{ producer: { name: 'incomplete' } }, 'producer.version'],
   [{ name: 'not-allowed-here' }, 'fails the schema'],
 ])('rejects root config %j', async (config, field) => {
   const dir = copyArtifact();

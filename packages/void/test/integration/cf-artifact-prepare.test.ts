@@ -101,7 +101,7 @@ describe('prepareCloudflareArtifact on playground/kitchen-sink', () => {
   it('keeps the placeholder IDs, because no account exists in this build', () => {
     const workerConfig = JSON.parse(
       readFileSync(
-        join(outDir, '.cloudflare/output/v0/workers/default/worker.config.json'),
+        join(outDir, '.cloudflare/output/v1/workers/default/worker.config.json'),
         'utf8',
       ),
     ) as { env: Record<string, { id?: string }> };

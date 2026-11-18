@@ -1,4 +1,4 @@
-import { OutputWorkerSchema } from '@cloudflare/config';
+import { BuildOutputWorkerConfigSchema } from '@cloudflare/config';
 import { quoteArtifactValue } from './cf-artifact-diagnostic.ts';
 import { assertCloudflareArtifactPath, CloudflareArtifactError } from './cf-artifact-files.ts';
 import type { CloudflareArtifactRequirements } from './cf-artifact-schema.ts';
@@ -7,10 +7,10 @@ import type {
   CloudflareArtifactTargetBinding,
 } from './cf-artifact-target.ts';
 
-export type CloudflareWorkerConfig = ReturnType<typeof OutputWorkerSchema.parse>;
+export type CloudflareWorkerConfig = ReturnType<typeof BuildOutputWorkerConfigSchema.parse>;
 
 export type BoundCloudflareArtifactWorker = {
-  /** The Worker config to upload, valid under OutputWorkerSchema. */
+  /** The Worker config to upload, valid under BuildOutputWorkerConfigSchema. */
   config: CloudflareWorkerConfig;
   /** The env key of the version-metadata binding, if any. */
   versionMetadataBinding: string | undefined;
@@ -140,7 +140,7 @@ export function bindCloudflareArtifactWorker(input: {
     workersDev: target.workersDev,
     previewUrls: target.previewUrls,
   };
-  const checked = OutputWorkerSchema.safeParse(draft);
+  const checked = BuildOutputWorkerConfigSchema.safeParse(draft);
   if (!checked.success) {
     const [issue] = checked.error.issues;
     throw configError(issuePath(issue), `fails the output schema: ${clip(issue.message)}`);
@@ -248,7 +248,7 @@ function assertNoProtoKeys(value: unknown): void {
 
 function parseArtifactWorker(workerConfig: unknown): Parsed {
   assertNoProtoKeys(workerConfig);
-  const result = OutputWorkerSchema.safeParse(workerConfig);
+  const result = BuildOutputWorkerConfigSchema.safeParse(workerConfig);
   if (result.success) {
     return result.data;
   }

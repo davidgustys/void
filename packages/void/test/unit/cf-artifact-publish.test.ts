@@ -66,7 +66,7 @@ const isWindows = process.platform === 'win32';
 const FIXTURE_TIMEOUT_MS = isWindows ? 90_000 : 30_000;
 
 const ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
-const BUNDLE_MODULE = '.cloudflare/output/v0/workers/default/bundle/index.js';
+const BUNDLE_MODULE = '.cloudflare/output/v1/workers/default/bundle/index.js';
 const D1_DATABASE_NAME = 'preview-42-db';
 
 // Every Cloudflare credential and transport selector, cleared so a developer's shell cannot reach
@@ -390,7 +390,7 @@ it('returns the live version when activation succeeds without a preview URL', as
 
 it('includes artifact observability in the settings snapshot published after activation', async () => {
   const dir = copyArtifact();
-  const workerPath = join(dir, '.cloudflare/output/v0/workers/default/worker.config.json');
+  const workerPath = join(dir, '.cloudflare/output/v1/workers/default/worker.config.json');
   const worker = JSON.parse(readFileSync(workerPath, 'utf8'));
   const observability = { enabled: true, logs: { enabled: true } };
   writeFileSync(workerPath, JSON.stringify({ ...worker, observability }));
@@ -515,7 +515,9 @@ it('reports activation failure details and removes its workspace', async () => {
   });
   expect(error.message).toBe(
     'deploy: the uploaded Worker Version did not pass /__void/ready.\n' +
-      'The failed version remains inactive, and traffic was restored to the previous version.',
+      'The failed version remains inactive, and traffic was restored to the previous version.\n\n' +
+      'D1 migrations were applied before activation, and a Worker rollback does not undo them. To undo them, restore this point (discards every later write):\n' +
+      '  void db restore --bookmark=bookmark-before-migrations',
   );
   expect(fake.activations).toHaveLength(1);
 });

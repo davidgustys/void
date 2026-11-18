@@ -80,7 +80,7 @@ it(
     ).toEqual([]);
     const workerConfig = JSON.parse(
       readFileSync(
-        join(project.outDir, '.cloudflare/output/v0/workers/default/worker.config.json'),
+        join(project.outDir, '.cloudflare/output/v1/workers/default/worker.config.json'),
         'utf8',
       ),
     );
@@ -280,7 +280,7 @@ it.each(['.env', '.dev.vars.local'])(
     const project = setupProject();
     writeFileSync(join(project.root, 'dist', 'client', name), 'API_TOKEN=local\n');
     await expect(packageCloudflareArtifact(inputFor(project))).rejects.toThrow(
-      `.cloudflare/output/v0/workers/default/assets/${name}`,
+      `.cloudflare/output/v1/workers/default/assets/${name}`,
     );
     expect(existsSync(project.outDir)).toBe(false);
   },

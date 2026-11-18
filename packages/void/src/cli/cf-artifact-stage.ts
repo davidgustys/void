@@ -7,7 +7,7 @@ import {
   writeRootConfig,
   writeWorkerConfig,
 } from '@cloudflare/build-output-utils';
-import { OutputRootConfigSchema } from '@cloudflare/config';
+import { BuildOutputRootConfigSchema } from '@cloudflare/config';
 import { dirname, join, resolve } from 'pathslash';
 import { collectMigrations } from '../migrations/collect.ts';
 import { assertJournalCoherence, validateMigrations } from '../migrations/validate.ts';
@@ -210,17 +210,17 @@ function makePrivateDirectory(path: string): string {
  * a compliance region, and the build must not be a preview.
  */
 function checkRootConfig(value: unknown, target: CloudflareArtifactTarget): void {
-  const parsed = OutputRootConfigSchema.safeParse(value);
+  const parsed = BuildOutputRootConfigSchema.safeParse(value);
   if (!parsed.success) {
     const [issue] = parsed.error.issues;
     throw rootConfigError(issuePath(issue), `fails the schema: ${clip(issue.message)}`);
   }
   const config = parsed.data;
-  if (config.accountId !== undefined && config.accountId !== target.accountId) {
-    throw rootConfigError('accountId', 'must be absent or equal to the target account ID');
+  if (config.settings?.accountId !== undefined && config.settings.accountId !== target.accountId) {
+    throw rootConfigError('settings.accountId', 'must be absent or equal to the target account ID');
   }
-  if (config.complianceRegion !== undefined) {
-    throw rootConfigError('complianceRegion', 'must be absent for a preview artifact');
+  if (config.settings?.complianceRegion !== undefined) {
+    throw rootConfigError('settings.complianceRegion', 'must be absent for a preview artifact');
   }
   if (config.buildContext.isPreview !== false) {
     throw rootConfigError(
@@ -368,11 +368,11 @@ function readSeed(
  */
 async function writeUploadTree(input: UploadTreeInput): Promise<string | undefined> {
   const { root, upload, manifest, target, worker } = input;
-  await writeRootConfig(
-    upload,
-    { accountId: target.accountId },
-    { isPreview: false, mode: 'production' },
-  );
+  await writeRootConfig({
+    root: upload,
+    settings: { accountId: target.accountId },
+    buildContext: { isPreview: false, mode: 'production' },
+  });
   await writeWorkerConfig({
     root: upload,
     config: worker.config,

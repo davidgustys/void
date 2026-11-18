@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { OutputWorkerSchema } from '@cloudflare/config';
+import { BuildOutputWorkerConfigSchema } from '@cloudflare/config';
 import {
   parseRootWranglerConfig,
   readCloudflareTriggerConfig,
@@ -56,7 +56,7 @@ function tempDir(): string {
 }
 function worker(overrides: Partial<Worker> = {}): Worker {
   return {
-    ...OutputWorkerSchema.parse({
+    ...BuildOutputWorkerConfigSchema.parse({
       name: WORKER_NAME,
       compatibilityDate: '2026-02-24',
       compatibilityFlags: ['nodejs_compat'],
@@ -203,7 +203,7 @@ it('maps only queue fields with values to snake_case', () => {
     worker: worker({
       triggers: [
         { type: 'queue', name: 'jobs' },
-        { type: 'queue', name: 'mail', maxConcurrency: null, visibilityTimeoutMs: 30_000 },
+        { type: 'queue', name: 'mail', maxConcurrency: undefined, visibilityTimeoutMs: 30_000 },
       ],
     }),
     target: { ...input().target, routes: [] },
@@ -217,7 +217,7 @@ it('maps only queue fields with values to snake_case', () => {
 
 it('emits minimal configs without D1, triggers, routes or version metadata', () => {
   const result = configs({
-    worker: OutputWorkerSchema.parse({
+    worker: BuildOutputWorkerConfigSchema.parse({
       name: WORKER_NAME,
       compatibilityDate: '2026-02-24',
       env: {},
